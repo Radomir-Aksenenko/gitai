@@ -101,10 +101,19 @@ concurrency = 8
 [providers.ollama]
 kind = "openai"
 base_url = "${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}"
-api_key = "ollama"
+api_key = "${OLLAMA_API_KEY:-ollama}"
 timeout_secs = 600
 max_retries = 2
-concurrency = 2
+concurrency = 4
+
+# Local network OpenAI-compatible server (vLLM, LM Studio, Ollama on another PC)
+[providers.lan]
+kind = "openai"
+base_url = "${LAN_LLM_URL:-http://192.168.1.100:11434/v1}"
+api_key = "${LAN_LLM_API_KEY:-none}"
+timeout_secs = 600
+max_retries = 2
+concurrency = 4
 
 [providers.mock]
 kind = "mock"
