@@ -223,7 +223,15 @@ async fn run_once(config_path: &PathBuf, args: RunArgs) -> anyhow::Result<()> {
 
     // Tail the event log while the engine works, so a long run is watchable.
     let tail = tokio::spawn(tail_events(state.store.clone(), task_id));
-    let final_state = state.engine.clone().run_task(task_id).await?;
+    let cancel = shutdown_signal();
+    let final_state = tokio::select! {
+        res = state.engine.clone().run_task(task_id) => res?,
+        _ = cancel => {
+            tail.abort();
+            println!("\n[interrupted by signal]");
+            return Ok(());
+        }
+    };
     tail.abort();
 
     // One last read, to catch events written between the last poll and the end.
@@ -292,8 +300,34 @@ fn init_tracing(verbose: bool) {
 }
 
 async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
-    tracing::info!("shutting down; in-flight tasks keep their lease until it expires");
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to install SIGTERM handler");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("received SIGINT (Ctrl+C), shutting down");
+        }
+        _ = terminate => {
+            tracing::info!("received SIGTERM, shutting down");
+        }
+    }
 }
 
 #[cfg(test)]
