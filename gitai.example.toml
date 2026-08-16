@@ -37,10 +37,16 @@ dir = "prompts"
 # nowhere else.
 kind = "docker"
 
-# The image needs the toolchain your repository builds with. Point it at your
-# own CI image and most of the `setup` section below disappears.
-image = "docker.io/library/rust:1-slim"
+# The default sandbox image. Use the polyglot sandbox image built from Dockerfile.sandbox
+# or point it at your organization's CI image.
+image = "gitai-sandbox:latest"
 workdir = "/work"
+
+# Optional per-repository image overrides.
+# Repositories can also declare their own image and gate commands in a `.gitai.toml` in repo root.
+# [sandbox.images]
+# "acme/backend" = "registry.company.com/backend-ci:latest"
+# "acme/frontend" = "node:20-bookworm"
 
 # "none" means generated code cannot reach the network. Leave it that way and
 # do dependency fetching in `gate.setup`, which runs before the lockdown.

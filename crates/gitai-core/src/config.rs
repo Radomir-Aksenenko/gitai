@@ -82,6 +82,8 @@ pub enum SandboxKind {
 pub struct SandboxConfig {
     pub kind: SandboxKind,
     pub image: String,
+    /// Per-repository or per-stack image mapping, e.g. "acme/widgets" -> "acme/ci:v1".
+    pub images: BTreeMap<String, String>,
     /// Mount point of the checkout inside the container.
     pub workdir: String,
     /// Docker `--network`. `none` is the right default: model-written code has
@@ -109,6 +111,7 @@ impl Default for SandboxConfig {
         Self {
             kind: SandboxKind::Docker,
             image: "docker.io/library/debian:bookworm-slim".into(),
+            images: BTreeMap::new(),
             workdir: "/work".into(),
             network: "none".into(),
             cpus: 2.0,
@@ -349,6 +352,32 @@ impl Default for ForgeConfig {
 
 // ---------------------------------------------------------------------------
 
+/// Optional repository-level configuration (.gitai.toml in repo root).
+/// Gives repository authors control over the custom sandbox image and exact gate verification commands.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RepoConfig {
+    /// Custom Docker image for this repo (e.g. "registry.example.com/ci:v1").
+    pub image: Option<String>,
+    /// Shell commands to run during setup (dependency install).
+    pub setup: Vec<String>,
+    /// Shell commands to build the project.
+    pub build: Vec<String>,
+    /// Shell commands to test the project.
+    pub test: Vec<String>,
+    /// Shell commands to lint the project.
+    pub lint: Vec<String>,
+}
+
+impl RepoConfig {
+    pub fn from_toml(raw: &str) -> Result<Self> {
+        let expanded = expand_env(raw);
+        toml::from_str(&expanded).map_err(|e| Error::config(format!("invalid .gitai.toml: {e}")))
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 impl Config {
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
@@ -535,5 +564,60 @@ model = "x"
     #[test]
     fn empty_gate_is_detected() {
         assert!(GateConfig::default().is_empty());
+    }
+
+    #[test]
+    fn repo_config_parses_cleanly_with_env() {
+        unsafe { std::env::set_var("GITAI_TEST_IMAGE", "registry.local/custom-cpp:v1") };
+        let raw = r#"
+image = "${GITAI_TEST_IMAGE}"
+setup = ["conan install ."]
+build = ["cmake --build build"]
+test = ["ctest --test-dir build"]
+lint = ["clang-tidy src/*.cpp"]
+"#;
+        let cfg = RepoConfig::from_toml(raw).unwrap();
+        assert_eq!(cfg.image.as_deref(), Some("registry.local/custom-cpp:v1"));
+        assert_eq!(cfg.setup, vec!["conan install ."]);
+        assert_eq!(cfg.build, vec!["cmake --build build"]);
+        assert_eq!(cfg.test, vec!["ctest --test-dir build"]);
+        assert_eq!(cfg.lint, vec!["clang-tidy src/*.cpp"]);
+    }
+
+    #[test]
+    fn sandbox_config_supports_per_repo_images() {
+        let raw = r#"
+[providers.local]
+kind = "openai"
+base_url = "http://localhost:11434/v1"
+
+[models.small]
+provider = "local"
+model = "qwen2.5-coder:7b"
+
+[roles]
+planner = "small"
+worker = ["small"]
+editor = "small"
+reviewer = "small"
+arbiter = "small"
+
+[sandbox]
+image = "gitai-sandbox:latest"
+
+[sandbox.images]
+"org/backend" = "registry.company.com/backend-ci:latest"
+"org/frontend" = "node:20-bookworm"
+"#;
+        let cfg = Config::from_toml(raw).unwrap();
+        assert_eq!(cfg.sandbox.image, "gitai-sandbox:latest");
+        assert_eq!(
+            cfg.sandbox.images.get("org/backend").map(String::as_str),
+            Some("registry.company.com/backend-ci:latest")
+        );
+        assert_eq!(
+            cfg.sandbox.images.get("org/frontend").map(String::as_str),
+            Some("node:20-bookworm")
+        );
     }
 }

@@ -53,7 +53,13 @@ impl DockerSandbox {
         }
     }
 
-    fn create_args(&self, name: &str, host_dir: &Path, user: Option<String>) -> Vec<String> {
+    fn create_args(
+        &self,
+        name: &str,
+        host_dir: &Path,
+        user: Option<String>,
+        image: &str,
+    ) -> Vec<String> {
         let mut args: Vec<String> = vec![
             "create".into(),
             "--name".into(),
@@ -96,7 +102,7 @@ impl DockerSandbox {
             args.push(format!("{k}={v}"));
         }
 
-        args.push(self.cfg.image.clone());
+        args.push(image.to_string());
         args.extend(["sh".to_string(), "-c".to_string(), KEEPALIVE.to_string()]);
         args
     }
@@ -144,6 +150,7 @@ impl Sandbox for DockerSandbox {
         let checkout = Checkout::prepare(&self.cfg.work_root, spec).await?;
         let name = format!("gitai-{}", spec.attempt_id);
         let user = self.derive_user(&self.cfg.work_root);
+        let image = spec.image.as_deref().unwrap_or(&self.cfg.image);
 
         // A leftover container from a crashed run would block the name.
         let _ = docker(
@@ -153,7 +160,7 @@ impl Sandbox for DockerSandbox {
         .await;
 
         let create = docker(
-            &self.create_args(&name, &checkout.root, user),
+            &self.create_args(&name, &checkout.root, user, image),
             Duration::from_secs(300),
         )
         .await?;
@@ -301,7 +308,7 @@ mod tests {
 
     #[test]
     fn create_args_carry_the_isolation_flags() {
-        let args = sandbox().create_args("gitai-x", Path::new("/tmp/ws"), None);
+        let args = sandbox().create_args("gitai-x", Path::new("/tmp/ws"), None, "rust:1-slim");
         let joined = args.join(" ");
         assert!(joined.contains("--network none"), "{joined}");
         assert!(joined.contains("--cap-drop ALL"), "{joined}");
@@ -318,7 +325,7 @@ mod tests {
 
     #[test]
     fn the_workspace_is_mounted_at_the_configured_workdir() {
-        let args = sandbox().create_args("gitai-x", Path::new("/tmp/ws"), None);
+        let args = sandbox().create_args("gitai-x", Path::new("/tmp/ws"), None, "rust:1-slim");
         let i = args.iter().position(|a| a == "--volume").unwrap();
         assert_eq!(args[i + 1], "/tmp/ws:/work");
         let w = args.iter().position(|a| a == "--workdir").unwrap();
@@ -327,7 +334,12 @@ mod tests {
 
     #[test]
     fn an_explicit_user_is_passed_through() {
-        let args = sandbox().create_args("gitai-x", Path::new("/tmp/ws"), Some("1000:1000".into()));
+        let args = sandbox().create_args(
+            "gitai-x",
+            Path::new("/tmp/ws"),
+            Some("1000:1000".into()),
+            "rust:1-slim",
+        );
         let i = args.iter().position(|a| a == "--user").unwrap();
         assert_eq!(args[i + 1], "1000:1000");
     }
@@ -340,9 +352,22 @@ mod tests {
             ..Default::default()
         };
         cfg.env.insert("CARGO_TERM_COLOR".into(), "never".into());
-        let args = DockerSandbox::new(cfg).create_args("n", Path::new("/ws"), None);
+        let args = DockerSandbox::new(cfg).create_args("n", Path::new("/ws"), None, "img");
         let joined = args.join(" ");
         assert!(joined.contains("/host/cargo:/root/.cargo"), "{joined}");
         assert!(joined.contains("CARGO_TERM_COLOR=never"), "{joined}");
+    }
+
+    #[test]
+    fn custom_image_is_respected() {
+        let args = sandbox().create_args(
+            "gitai-custom",
+            Path::new("/tmp/ws"),
+            None,
+            "custom-repo-env:v2",
+        );
+        let joined = args.join(" ");
+        assert!(joined.contains("custom-repo-env:v2"), "{joined}");
+        assert!(!joined.contains("rust:1-slim"), "{joined}");
     }
 }

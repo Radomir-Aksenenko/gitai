@@ -245,6 +245,9 @@ pub struct Spec {
     /// Detected language/stack of the project, e.g. "Rust", "Python (pytest)", "Node.js (TypeScript)", "Go".
     #[serde(default)]
     pub language: Option<String>,
+    /// Container image for building and testing, overridden by .gitai.toml, server config, or planner.
+    #[serde(default)]
+    pub image: Option<String>,
     /// One paragraph: what "done" means, in the repo's own vocabulary.
     pub goal: String,
     /// Checkable statements. The reviewer scores against exactly these.

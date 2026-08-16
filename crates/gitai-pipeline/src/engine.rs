@@ -16,7 +16,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use gitai_core::config::{Config, GateConfig};
+use gitai_core::config::{Config, GateConfig, RepoConfig};
 use gitai_core::error::{Error, Result};
 use gitai_core::event::{Event, EventKind};
 use gitai_core::forge::Forge;
@@ -415,6 +415,11 @@ impl Engine {
         )
         .await;
 
+        let attempt_image = spec
+            .image
+            .clone()
+            .or_else(|| self.resolve_configured_image(&task.repo.full_name()));
+
         let ws_spec = WorkspaceSpec {
             task_id: task.id,
             attempt_id: attempt.id,
@@ -422,6 +427,7 @@ impl Engine {
             repo_slug: format!("{}-{}", task.repo.owner, task.repo.name),
             base_branch: base_branch.to_string(),
             branch,
+            image: attempt_image,
         };
 
         let workspace = match self.sandbox.create(&ws_spec).await {
@@ -656,6 +662,7 @@ impl Engine {
     async fn plan(&self, task: &Task, repo_url: &str, base_branch: &str) -> Result<(Spec, Spend)> {
         // The planner needs to see the repository, which means one throwaway
         // workspace before any attempt exists.
+        let initial_image = self.resolve_configured_image(&task.repo.full_name());
         let spec_ws = WorkspaceSpec {
             task_id: task.id,
             attempt_id: gitai_core::model::AttemptId::new(),
@@ -663,14 +670,17 @@ impl Engine {
             repo_slug: format!("{}-{}", task.repo.owner, task.repo.name),
             base_branch: base_branch.to_string(),
             branch: format!("gitai/issue-{}/plan", task.issue.number),
+            image: initial_image.clone(),
         };
         let ws = self.sandbox.create(&spec_ws).await?;
         let limits = self.roles.limits_for_role(Role::Planner);
+        let repo_cfg = Self::read_repo_config(ws.as_ref()).await;
 
         let result = async {
             let file_tree = context::file_tree(ws.as_ref(), &limits).await?;
             let readme = context::read_readme(ws.as_ref(), &limits).await;
-            self.roles
+            let (mut spec, spend) = self
+                .roles
                 .plan(PlannerCtx {
                     repo: task.repo.full_name(),
                     issue: task.issue.clone(),
@@ -679,7 +689,30 @@ impl Engine {
                     readme,
                     readme_limit: limits.max_readme_bytes,
                 })
-                .await
+                .await?;
+
+            // In-repo .gitai.toml takes precedence if provided:
+            if let Some(rc) = &repo_cfg {
+                if let Some(img) = &rc.image {
+                    spec.image = Some(img.clone());
+                }
+                if !rc.setup.is_empty() {
+                    spec.setup_commands = rc.setup.clone();
+                }
+                if !rc.build.is_empty() {
+                    spec.build_commands = rc.build.clone();
+                }
+                if !rc.test.is_empty() {
+                    spec.test_commands = rc.test.clone();
+                }
+                if !rc.lint.is_empty() {
+                    spec.lint_commands = rc.lint.clone();
+                }
+            } else if spec.image.is_none() {
+                spec.image = initial_image;
+            }
+
+            Ok((spec, spend))
         }
         .await;
 
@@ -963,9 +996,11 @@ impl Engine {
 
         let gate_cfg = self.effective_gate_config(spec);
         let lang = spec.language.as_deref().unwrap_or("Не определён / Общий");
+        let active_image = spec.image.as_deref().unwrap_or(&self.cfg.sandbox.image);
         body.push_str(&format!(
             "\n🔍 **Стек проекта и команды автопроверки (Adaptive Gate):**\n\
              - **Определённый стек:** `{lang}`\n\
+             - **Сборочное окружение (Sandbox Image):** `{active_image}`\n\
              - **Установка зависимостей (Setup):** {}\n\
              - **Сборка (Build):** {}\n\
              - **Тестирование (Test):** {}\n\
@@ -1121,6 +1156,30 @@ impl Engine {
         {
             tracing::warn!(error = %e, "could not report the failure on the issue");
         }
+    }
+
+    /// Resolves configured sandbox image for a repository based on sandbox.images mapping.
+    fn resolve_configured_image(&self, repo_full_name: &str) -> Option<String> {
+        if let Some(img) = self.cfg.sandbox.images.get(repo_full_name) {
+            return Some(img.clone());
+        }
+        if let Some((_owner, name)) = repo_full_name.split_once('/') {
+            if let Some(img) = self.cfg.sandbox.images.get(name) {
+                return Some(img.clone());
+            }
+        }
+        None
+    }
+
+    /// Reads .gitai.toml in the repository root if present.
+    async fn read_repo_config(ws: &dyn Workspace) -> Option<RepoConfig> {
+        let content = ws.read_file(".gitai.toml").await.ok()?;
+        RepoConfig::from_toml(&content)
+            .map_err(|e| {
+                tracing::warn!(error = %e, "failed to parse in-repo .gitai.toml");
+                e
+            })
+            .ok()
     }
 
     /// Derives the effective gate config, combining static config with dynamically detected
@@ -1678,5 +1737,57 @@ test = [{tests}]
         assert!(line.contains("1500 tokens"), "{line}");
         assert!(line.contains("$0.042"), "{line}");
         assert!(line.contains("63s"), "{line}");
+    }
+
+    #[tokio::test]
+    async fn resolve_configured_image_matches_full_name_and_repo_name() {
+        let cfg = Arc::new(Config {
+            providers: std::collections::BTreeMap::from([(
+                "mock".into(),
+                gitai_core::config::ProviderConfig {
+                    kind: gitai_core::config::ProviderKind::Mock,
+                    ..Default::default()
+                },
+            )]),
+            models: std::collections::BTreeMap::from([(
+                "m".into(),
+                gitai_core::config::ModelConfig {
+                    provider: "mock".into(),
+                    model: "mock".into(),
+                    ..Default::default()
+                },
+            )]),
+            roles: gitai_core::config::RoleConfig {
+                planner: "m".into(),
+                worker: vec!["m".into()],
+                editor: "m".into(),
+                reviewer: "m".into(),
+                arbiter: "m".into(),
+            },
+            sandbox: gitai_core::config::SandboxConfig {
+                images: std::collections::BTreeMap::from([
+                    ("acme/widgets".into(), "acme-ci:v1".into()),
+                    ("frontend".into(), "node:20-alpine".into()),
+                ]),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let store: Arc<dyn Store> = Arc::new(gitai_store::SqliteStore::in_memory().await.unwrap());
+        let sandbox: Arc<dyn Sandbox> =
+            Arc::new(crate::testing::MemSandbox::new(std::collections::BTreeMap::new()));
+        let forges = Arc::new(gitai_forge::ForgeRegistry::build(&cfg).unwrap());
+        let engine = Engine::new(cfg, store, sandbox, forges).unwrap();
+
+        assert_eq!(
+            engine.resolve_configured_image("acme/widgets"),
+            Some("acme-ci:v1".into())
+        );
+        assert_eq!(
+            engine.resolve_configured_image("my-org/frontend"),
+            Some("node:20-alpine".into())
+        );
+        assert_eq!(engine.resolve_configured_image("other/project"), None);
     }
 }

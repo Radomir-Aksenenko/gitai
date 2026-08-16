@@ -21,6 +21,8 @@ pub struct WorkspaceSpec {
     pub base_branch: String,
     /// Branch the attempt commits to.
     pub branch: String,
+    /// Custom container image to use for this workspace (overrides SandboxConfig.image).
+    pub image: Option<String>,
 }
 
 #[derive(Debug, Clone)]

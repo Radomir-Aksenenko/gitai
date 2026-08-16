@@ -139,6 +139,27 @@ boundary and says so on every startup.
 Git always runs on the host, never in the sandbox, so generated code never
 holds a credentialed remote.
 
+### Build Environments & Custom Toolchains
+
+By default, GitAi uses a polyglot sandbox image (`Dockerfile.sandbox` -> `gitai-sandbox:latest`) with preinstalled compilers and tools for **Rust, Python 3, Node.js/TypeScript, Go, and C/C++** (along with `cmake`, `pkg-config`, `libssl-dev`, and core utilities).
+
+Repositories can customize their environment and Gate checks in two ways:
+1. **In-repo `.gitai.toml`** (in the repository root):
+   ```toml
+   # Custom CI/build Docker image
+   image = "registry.company.com/custom-env:latest"
+   setup = ["poetry install"]
+   build = ["poetry run make"]
+   test  = ["poetry run pytest"]
+   lint  = ["poetry run ruff check ."]
+   ```
+2. **Server config `gitai.toml`**:
+   ```toml
+   [sandbox.images]
+   "org/repo-name" = "registry.company.com/backend-ci:v1"
+   "org/frontend"  = "node:20-bookworm"
+   ```
+
 ## Layout
 
 | Crate | What lives there |

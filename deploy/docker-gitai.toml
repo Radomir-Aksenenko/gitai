@@ -21,7 +21,7 @@ dir = "/data/prompts"
 # "docker" uses sibling containers via mounted /var/run/docker.sock.
 # "local" runs commands directly inside this container (development only).
 kind = "${SANDBOX_KIND:-docker}"
-image = "${SANDBOX_IMAGE:-docker.io/library/rust:1-slim}"
+image = "${SANDBOX_IMAGE:-gitai-sandbox:latest}"
 workdir = "/work"
 network = "none"
 cpus = 2.0

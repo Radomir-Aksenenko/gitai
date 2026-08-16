@@ -23,6 +23,16 @@ services:
       retries: 3
       start_period: 5s
 
+  # Polyglot build sandbox image used by gitai for compiles and test gates
+  sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    image: gitai-sandbox:latest
+    container_name: gitai-sandbox-builder
+    restart: "no"
+    entrypoint: ["echo", "gitai-sandbox:latest image is built"]
+
   # Optional local Gitea instance for a complete all-in-one local setup.
   # Run with: docker compose --profile full up -d
   gitea:

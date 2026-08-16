@@ -1,0 +1,62 @@
+# ==============================================================================
+# GitAi Universal Polyglot Sandbox Image
+# Includes: Rust, Python 3, Node.js/TypeScript, Go, C/C++, CMake, OpenSSL
+# ==============================================================================
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    GOPATH=/usr/local/go-path \
+    PATH=/usr/local/cargo/bin:/usr/local/go/bin:/usr/local/go-path/bin:/usr/local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    CARGO_TERM_COLOR=never \
+    CI=1
+
+# 1. Base system tools, C/C++ compiler and core development libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    build-essential \
+    clang \
+    cmake \
+    pkg-config \
+    libssl-dev \
+    jq \
+    unzip \
+    tar \
+    gzip \
+    make \
+    python3 \
+    python3-pip \
+    python3-venv \
+    golang-go \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Install Node.js LTS (v20) and package managers (npm, yarn, pnpm, typescript, tsx)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g --no-fund --no-audit yarn pnpm typescript tsx \
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. Install Rust stable toolchain (rustc, cargo, clippy, rustfmt)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    --default-toolchain stable \
+    --profile default \
+    --no-modify-path \
+    && chmod -R 777 /usr/local/rustup /usr/local/cargo
+
+# 4. Install Python test and lint tools in a system-accessible manner
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    pytest \
+    ruff \
+    pytest-cov \
+    build \
+    virtualenv
+
+# Set up work directory and permissions
+WORKDIR /work
+RUN chmod -R 777 /work
+
+CMD ["sh", "-c", "tail -f /dev/null"]
