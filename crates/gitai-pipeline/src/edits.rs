@@ -17,19 +17,28 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum Edit {
     /// Replaces the entire file, creating it if needed.
+    #[serde(alias = "create", alias = "add", alias = "new", alias = "overwrite", alias = "Write")]
     Write {
+        #[serde(alias = "file", alias = "filename", alias = "filepath")]
         path: String,
+        #[serde(alias = "code", alias = "text", alias = "body")]
         content: String,
     },
     /// Exact-string substitution. Refuses to guess when ambiguous.
+    #[serde(alias = "update", alias = "modify", alias = "patch", alias = "Replace")]
     Replace {
+        #[serde(alias = "file", alias = "filename", alias = "filepath")]
         path: String,
+        #[serde(alias = "search", alias = "old", alias = "target")]
         find: String,
+        #[serde(alias = "new", alias = "replacement", alias = "with")]
         replace: String,
         #[serde(default)]
         all: bool,
     },
+    #[serde(alias = "remove", alias = "del", alias = "unlink", alias = "Delete")]
     Delete {
+        #[serde(alias = "file", alias = "filename", alias = "filepath")]
         path: String,
     },
 }
@@ -334,5 +343,19 @@ mod tests {
         assert_eq!(edits[0].path(), "a.rs");
         assert!(matches!(edits[2], Edit::Replace { all: true, .. }));
         assert!(matches!(edits[3], Edit::Delete { .. }));
+    }
+
+    #[test]
+    fn edit_aliases_deserialise_cleanly() {
+        let raw = r#"[
+            {"op":"create","file":"main.py","code":"print(1)"},
+            {"op":"modify","filename":"b.py","search":"1","with":"2"},
+            {"op":"remove","filepath":"c.py"}
+        ]"#;
+        let edits: Vec<Edit> = serde_json::from_str(raw).unwrap();
+        assert_eq!(edits.len(), 3);
+        assert!(matches!(&edits[0], Edit::Write { path, content } if path == "main.py" && content == "print(1)"));
+        assert!(matches!(&edits[1], Edit::Replace { path, find, replace, .. } if path == "b.py" && find == "1" && replace == "2"));
+        assert!(matches!(&edits[2], Edit::Delete { path } if path == "c.py"));
     }
 }
