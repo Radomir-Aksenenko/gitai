@@ -1,0 +1,25 @@
+[package]
+name = "gitai-pipeline"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+gitai-core.workspace = true
+gitai-forge.workspace = true
+gitai-llm.workspace = true
+gitai-sandbox.workspace = true
+
+async-trait.workspace = true
+chrono.workspace = true
+minijinja.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+gitai-store.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

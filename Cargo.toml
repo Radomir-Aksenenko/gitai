@@ -1,0 +1,69 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/gitai/gitai"
+
+[workspace.dependencies]
+gitai-core = { path = "crates/gitai-core" }
+gitai-llm = { path = "crates/gitai-llm" }
+gitai-forge = { path = "crates/gitai-forge" }
+gitai-sandbox = { path = "crates/gitai-sandbox" }
+gitai-store = { path = "crates/gitai-store" }
+gitai-pipeline = { path = "crates/gitai-pipeline" }
+gitai-server = { path = "crates/gitai-server" }
+
+anyhow = "1"
+async-trait = "0.1"
+axum = "0.8"
+base64 = "0.23"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "env"] }
+dotenvy = "0.15"
+futures = "0.3"
+hmac = "0.13"
+minijinja = "2"
+reqwest = { version = "0.13", default-features = false, features = [
+    "json",
+    "charset",
+    "http2",
+    "rustls",
+    # Trust the OS store, so a self-hosted forge behind a private CA works
+    # once that CA is installed on the host.
+    "rustls-native-certs",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+similar = "3"
+sqlx = { version = "0.9", default-features = false, features = [
+    "runtime-tokio",
+    "sqlite",
+    "chrono",
+    "uuid",
+] }
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+toml = "1"
+tower-http = { version = "0.7", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Platform bits, used only to kill a whole process tree on timeout.
+libc = "0.2"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

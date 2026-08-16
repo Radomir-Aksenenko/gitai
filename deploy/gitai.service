@@ -1,0 +1,54 @@
+# systemd unit for gitai.
+#
+#   sudo cp gitai.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now gitai
+#
+# See docs/deploy-linux.md for the accounts, paths and secrets this expects.
+
+[Unit]
+Description=gitai
+Documentation=https://github.com/gitai/gitai
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=exec
+User=gitai
+# Membership of the docker group is what lets gitai create sandboxes. It is
+# also root-equivalent on this host: anyone who can talk to the Docker socket
+# can mount the root filesystem into a container. Give gitai its own machine,
+# or its own user at the very least.
+Group=docker
+
+WorkingDirectory=/opt/gitai
+ExecStart=/opt/gitai/gitai --config /opt/gitai/gitai.toml serve
+
+# API keys and forge tokens live here, mode 0600, owned by root.
+EnvironmentFile=/etc/gitai/env
+
+Restart=on-failure
+RestartSec=5s
+
+# In-flight tasks hold a lease that another runner reclaims after it expires,
+# so a restart loses at most one round of work rather than corrupting state.
+TimeoutStopSec=30s
+KillSignal=SIGINT
+
+# Sandboxing that still means something given the Docker group above.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=/opt/gitai
+
+# Journal only; gitai writes structured logs to stdout.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+/target
+/.gitai
+gitai.toml
+*.db
+*.db-wal
+*.db-shm
+.env

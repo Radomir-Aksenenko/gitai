@@ -1,0 +1,9 @@
+# LF everywhere, including Windows checkouts. This repository ships a systemd
+# unit, a compose file and shell snippets that are read on Linux, and it is
+# developed on both platforms, so line endings should not depend on whoever
+# happened to clone it.
+* text=auto eol=lf
+
+# Cargo.lock is generated but committed on purpose: this produces a binary, and
+# a reproducible build matters more than a tidy diff.
+Cargo.lock linguist-generated=true -merge

@@ -1,0 +1,281 @@
+# gitai configuration.
+#
+# Secrets never live here. `${VAR}` and `${VAR:-fallback}` are read from the
+# environment when the file loads, so this file is safe to commit and the
+# tokens come from your shell, a systemd unit, or a .env next to the binary.
+#
+# Run `gitai doctor` after editing: it validates every reference in this file
+# and tells you which piece is missing before a run burns tokens finding out.
+
+# ---------------------------------------------------------------------------
+# Server
+# ---------------------------------------------------------------------------
+
+[server]
+bind = "127.0.0.1:8080"
+# How gitai is reached from outside. Only used to build links.
+public_url = "http://127.0.0.1:8080"
+# Tasks running at once. Each one fans out to `budget.attempts_per_round`
+# sandboxes, so the real container count is this times that.
+concurrency = 2
+
+[storage]
+url = "sqlite://.gitai/gitai.db?mode=rwc"
+
+[prompts]
+# `gitai init` writes the built-in templates here. Edit them freely: they are
+# read at startup, and nothing needs recompiling.
+dir = "prompts"
+
+# ---------------------------------------------------------------------------
+# Where model-written code runs
+# ---------------------------------------------------------------------------
+
+[sandbox]
+# "docker" for anything real. "local" runs commands straight on the host with
+# no isolation, which is fine while you are developing gitai itself and
+# nowhere else.
+kind = "docker"
+
+# The image needs the toolchain your repository builds with. Point it at your
+# own CI image and most of the `setup` section below disappears.
+image = "docker.io/library/rust:1-slim"
+workdir = "/work"
+
+# "none" means generated code cannot reach the network. Leave it that way and
+# do dependency fetching in `gate.setup`, which runs before the lockdown.
+network = "none"
+
+cpus = 2.0
+memory = "4g"
+pids_limit = 512
+
+# Ceiling for a single command, not the whole attempt.
+timeout_secs = 900
+
+# Mirrors and per-attempt checkouts live here. Give it room.
+work_root = ".gitai/work"
+
+# Cache mounts make the difference between a 30-second gate and a 5-minute one.
+mounts = [
+    # "/var/cache/gitai/cargo:/usr/local/cargo/registry",
+]
+
+[sandbox.env]
+CARGO_TERM_COLOR = "never"
+CI = "1"
+
+# ---------------------------------------------------------------------------
+# Budget: the hard stops
+# ---------------------------------------------------------------------------
+#
+# Every one of these exists because a self-correcting loop without it will
+# happily spend a weekend on a typo.
+
+[budget]
+# Outer loop. An arbiter rejection sends the work back this many times.
+max_rounds = 3
+# How many models attack the task in parallel each round.
+attempts_per_round = 3
+# Inner loop. Worker-to-editor passes before an attempt is abandoned.
+max_iterations = 8
+
+max_tokens = 2000000
+max_wall_secs = 3600
+max_cost_usd = 5.0
+
+# ---------------------------------------------------------------------------
+# The gate: the part no model gets a vote on
+# ---------------------------------------------------------------------------
+#
+# An empty gate turns the whole pipeline into models grading each other. Fill
+# this in first, before you tune a single prompt.
+
+[gate]
+# Runs once per workspace, before the network is cut.
+setup = ["cargo fetch --locked"]
+
+build = ["cargo build --all-targets --locked"]
+test = ["cargo test --all --locked"]
+lint = ["cargo clippy --all-targets -- -D warnings", "cargo fmt --check"]
+
+# Reject a patch that adds no test. Blunt, and it works.
+require_tests = false
+test_path_patterns = [
+    "**/test/**",
+    "**/tests/**",
+    "**/spec/**",
+    "**/*_test.*",
+    "**/test_*",
+    "**/*.test.*",
+    "**/*.spec.*",
+]
+
+# Reject a patch that reaches outside the paths the planner marked in scope.
+enforce_scope = true
+
+# A patch nobody can review is not a finished patch.
+max_changed_files = 60
+
+# Bytes of command output kept per check and shown to the models.
+output_tail_bytes = 8000
+
+# ---------------------------------------------------------------------------
+# Providers
+# ---------------------------------------------------------------------------
+#
+# kind = "openai" speaks the chat-completions API, which is what vLLM, Ollama,
+# LM Studio, llama.cpp, OpenRouter, DeepSeek and OpenAI itself all serve. Local
+# models need nothing special: just a base_url.
+
+[providers.ollama]
+kind = "openai"
+base_url = "http://127.0.0.1:11434/v1"
+api_key = "ollama"
+timeout_secs = 600
+max_retries = 2
+# Local runtimes queue rather than scale. Keep this at or below the number of
+# model slots the server actually has.
+concurrency = 2
+
+[providers.anthropic]
+kind = "anthropic"
+base_url = "https://api.anthropic.com"
+api_key = "${ANTHROPIC_API_KEY}"
+timeout_secs = 300
+max_retries = 3
+concurrency = 8
+
+# [providers.openrouter]
+# kind = "openai"
+# base_url = "https://openrouter.ai/api/v1"
+# api_key = "${OPENROUTER_API_KEY}"
+
+# Answers canned replies with no network at all. `gitai run` against this
+# exercises the whole pipeline offline.
+[providers.mock]
+kind = "mock"
+base_url = ""
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+#
+# price_in and price_out are USD per million tokens and only feed the cost
+# budget. Leave them at 0 for local models.
+
+[models.big]
+provider = "anthropic"
+model = "claude-opus-5"
+temperature = 0.2
+max_tokens = 16000
+price_in = 5.0
+price_out = 25.0
+context_tokens = 200000
+
+[models.mid]
+provider = "anthropic"
+model = "claude-sonnet-5"
+temperature = 0.3
+max_tokens = 12000
+price_in = 3.0
+price_out = 15.0
+context_tokens = 200000
+
+[models.small-a]
+provider = "ollama"
+model = "qwen2.5-coder:14b"
+temperature = 0.6
+max_tokens = 8000
+context_tokens = 32000
+
+[models.small-b]
+provider = "ollama"
+model = "deepseek-coder-v2:16b"
+# A different temperature on a second worker is cheap diversity: two samples
+# from the same model at the same temperature tend to fail the same way.
+temperature = 0.9
+max_tokens = 8000
+context_tokens = 32000
+
+[models.mock]
+provider = "mock"
+model = "mock"
+
+# ---------------------------------------------------------------------------
+# Roles
+# ---------------------------------------------------------------------------
+#
+# The shape of the whole system in five lines. `worker` is a list and gitai
+# cycles through it, so a fan-out of three across two models is 2/1 rather than
+# three copies of one.
+
+[roles]
+planner = "big"
+worker = ["small-a", "small-b"]
+editor = "mid"
+reviewer = "mid"
+arbiter = "big"
+
+# Everything on the mock provider, for a first offline run:
+# planner = "mock"
+# worker = ["mock"]
+# editor = "mock"
+# reviewer = "mock"
+# arbiter = "mock"
+
+# ---------------------------------------------------------------------------
+# Forges
+# ---------------------------------------------------------------------------
+#
+# Each key here becomes a webhook endpoint at /webhooks/<key>. Configure the
+# hook on the forge side with content type application/json and the same
+# secret.
+
+[forges.local]
+# Gitea and Forgejo share an API; one adapter serves both.
+kind = "gitea"
+base_url = "https://git.example.com/api/v1"
+token = "${GITEA_TOKEN}"
+webhook_secret = "${GITEA_WEBHOOK_SECRET}"
+# Only issues carrying this label are picked up, and `/gitai` in a comment
+# restarts a run. Leave it empty to act on every issue, which you will regret
+# on a busy repository.
+trigger_label = "gitai"
+# The account gitai pushes as. Used to ignore its own webhooks.
+bot_login = "gitai"
+# Draft pull requests keep CI from firing on unreviewed work.
+draft_prs = true
+# Every attempt that clears the gate gets pushed, because the winner is not
+# known until the workspaces are gone. This sweeps up the ones that lost, once
+# the task ends either way. The diffs stay in the event log regardless, so turn
+# it off only when you want the refs themselves for a post-mortem.
+delete_rejected_branches = true
+timeout_secs = 30
+
+[forges.hub]
+kind = "github"
+base_url = "https://api.github.com"
+token = "${GITHUB_TOKEN}"
+webhook_secret = "${GITHUB_WEBHOOK_SECRET}"
+trigger_label = "gitai"
+bot_login = "gitai[bot]"
+draft_prs = true
+delete_rejected_branches = true
+timeout_secs = 30
+
+[forges.lab]
+kind = "gitlab"
+# Self-managed GitLab: https://gitlab.example.com/api/v4
+base_url = "https://gitlab.com/api/v4"
+token = "${GITLAB_TOKEN}"
+# GitLab does not sign its deliveries. It echoes this value back in the
+# X-Gitlab-Token header, and that comparison is the whole of the
+# authentication, so make it long and random.
+webhook_secret = "${GITLAB_WEBHOOK_SECRET}"
+trigger_label = "gitai"
+bot_login = "gitai"
+# Merge requests, and GitLab has no draft flag: this becomes a `Draft:` prefix.
+draft_prs = true
+delete_rejected_branches = true
+timeout_secs = 30

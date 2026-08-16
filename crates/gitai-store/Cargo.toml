@@ -1,0 +1,19 @@
+[package]
+name = "gitai-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+gitai-core.workspace = true
+
+async-trait.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
