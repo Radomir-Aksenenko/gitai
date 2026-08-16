@@ -29,6 +29,7 @@ pub enum EventKind {
     BudgetWarning,
     Log,
     Failed,
+    Cancelled,
 }
 
 impl EventKind {
@@ -48,6 +49,7 @@ impl EventKind {
             Self::BudgetWarning => "budget_warning",
             Self::Log => "log",
             Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
         }
     }
 }
@@ -76,6 +78,7 @@ impl FromStr for EventKind {
             "budget_warning" => Self::BudgetWarning,
             "log" => Self::Log,
             "failed" => Self::Failed,
+            "cancelled" => Self::Cancelled,
             other => return Err(Error::store(format!("unknown event kind `{other}`"))),
         })
     }

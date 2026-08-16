@@ -130,6 +130,14 @@ impl Engine {
         let mut feedback = String::new();
 
         while task.round < budget.max_rounds {
+            let current = self.store.get_task(task.id).await?;
+            if current.state == TaskState::Cancelled {
+                task.state = TaskState::Cancelled;
+                let forge = self.delivery(task).ok().flatten();
+                self.prune_branches(task, None, forge.as_deref()).await;
+                return Ok(TaskState::Cancelled);
+            }
+
             task.spend.wall_secs = started.elapsed().as_secs();
             task.spend.check(&budget)?;
 
