@@ -26,7 +26,7 @@ mod local;
     about = "Issue in, reviewed pull request out. Self-hosted, model-agnostic."
 )]
 struct Cli {
-    #[arg(short, long, default_value = "gitai.toml", global = true)]
+    #[arg(short, long, default_value = "gitai.toml", env = "GITAI_CONFIG", global = true)]
     config: PathBuf,
 
     /// Debug logging.

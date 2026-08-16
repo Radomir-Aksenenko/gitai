@@ -45,6 +45,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Persistent data volume
 VOLUME /data
+WORKDIR /data
 ENV GITAI_DATA_DIR=/data
 ENV GITAI_CONFIG=/data/gitai.toml
 
