@@ -105,6 +105,7 @@ impl Engine {
             });
         }
         let base_branch = task.base_branch.clone().expect("just set");
+        self.announce_start(task, forge.as_deref()).await;
 
         // -- plan -----------------------------------------------------------
         if task.spec.is_none() {
@@ -158,6 +159,7 @@ impl Engine {
                 .with_data(json!({ "round": task.round, "passed": passed.len() })),
             )
             .await;
+            self.announce_round(task, forge.as_deref(), &attempts, passed.len()).await;
 
             if passed.is_empty() {
                 feedback = aggregate_failures(&attempts);
@@ -282,6 +284,7 @@ impl Engine {
                 let _ = self.store.save_attempt(&other).await;
             }
 
+            self.announce_arbiter_feedback(task, forge.as_deref(), &verdict).await;
             feedback = verdict.feedback();
             task.round += 1;
             self.store.update_task(task).await?;
@@ -823,26 +826,126 @@ impl Engine {
         }
     }
 
+    async fn announce_start(&self, task: &Task, forge: Option<&dyn Forge>) {
+        let Some(forge) = forge else {
+            return;
+        };
+        let body = format!(
+            "🤖 **GitAI взял задачу в работу**\n\n\
+             - **Репозиторий:** `{}` (ветка: `{}`)\n\
+             - **Лимит:** до {} раундов по {} попыток воркеров\n\n\
+             ⏳ *Анализирую репозиторий и составляю план реализации...*",
+            task.repo.full_name(),
+            task.base_branch.as_deref().unwrap_or("main"),
+            task.budget.max_rounds,
+            task.budget.attempts_per_round
+        );
+        if let Err(e) = forge
+            .comment_issue(&task.repo, task.issue.number, &body)
+            .await
+        {
+            tracing::warn!(error = %e, "could not announce start on the issue");
+        }
+    }
+
     async fn announce_plan(&self, task: &Task, forge: Option<&dyn Forge>) {
         let (Some(forge), Some(spec)) = (forge, task.spec.as_ref()) else {
             return;
         };
         let mut body = format!(
-            "Picked this up. Plan:\n\n{}\n\nAcceptance criteria:\n",
+            "📋 **План решения составлен**\n\n\
+             **Цель:**\n{}\n\n\
+             **Критерии готовности:**\n",
             spec.goal
         );
         for a in &spec.acceptance {
             body.push_str(&format!("- {a}\n"));
         }
+        if !spec.allowed_paths.is_empty() {
+            body.push_str(&format!(
+                "\n**Файлы в работе:** {}\n",
+                spec.allowed_paths
+                    .iter()
+                    .map(|p| format!("`{p}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
         body.push_str(&format!(
-            "\nRunning up to {} rounds of {} attempts.",
-            task.budget.max_rounds, task.budget.attempts_per_round
+            "\n🚀 *Запускаю раунд {} ({} параллельных попыток воркеров с проверкой через Gate)...*",
+            task.round, task.budget.attempts_per_round
         ));
         if let Err(e) = forge
             .comment_issue(&task.repo, task.issue.number, &body)
             .await
         {
             tracing::warn!(error = %e, "could not announce the plan on the issue");
+        }
+    }
+
+    async fn announce_round(
+        &self,
+        task: &Task,
+        forge: Option<&dyn Forge>,
+        attempts: &[Attempt],
+        passed_count: usize,
+    ) {
+        let Some(forge) = forge else {
+            return;
+        };
+        let mut body = format!(
+            "🛠 **Раунд {} завершён**\n\n\
+             - **Результаты проверки (Gate):** {} из {} попыток успешно прошли сборку и тесты.\n\n\
+             **Попытки:**\n",
+            task.round,
+            passed_count,
+            attempts.len()
+        );
+        for a in attempts {
+            let status = if a.gate_passed() {
+                format!("✅ Прошла Gate (итераций: {}, модель: `{}`)", a.iterations, a.model)
+            } else {
+                format!("❌ Не прошла Gate (итераций: {}, модель: `{}`)", a.iterations, a.model)
+            };
+            body.push_str(&format!("- Попытка #{}: {}\n", a.index, status));
+        }
+
+        if passed_count > 0 {
+            body.push_str("\n🔍 *Перехожу к этапу независимого код-ревью и арбитража...*");
+        } else {
+            body.push_str("\n⚠️ *Ни одна попытка не прошла тесты. Передаю ошибки в следующий раунд для исправления...*");
+        }
+
+        if let Err(e) = forge
+            .comment_issue(&task.repo, task.issue.number, &body)
+            .await
+        {
+            tracing::warn!(error = %e, "could not announce round results on the issue");
+        }
+    }
+
+    async fn announce_arbiter_feedback(
+        &self,
+        task: &Task,
+        forge: Option<&dyn Forge>,
+        verdict: &Verdict,
+    ) {
+        let Some(forge) = forge else {
+            return;
+        };
+        let body = format!(
+            "🔄 **Арбитр запросил доработку (Раунд {} → {})**\n\n\
+             **Замечания арбитра:**\n{}\n\n\
+             *Запускаю следующий раунд с учётом замечаний...*",
+            task.round,
+            task.round + 1,
+            verdict.summary
+        );
+        if let Err(e) = forge
+            .comment_issue(&task.repo, task.issue.number, &body)
+            .await
+        {
+            tracing::warn!(error = %e, "could not announce arbiter feedback on the issue");
         }
     }
 
