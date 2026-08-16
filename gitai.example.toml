@@ -138,6 +138,14 @@ max_retries = 2
 # model slots the server actually has.
 concurrency = 2
 
+[providers.lan]
+kind = "openai"
+base_url = "${LAN_LLM_URL:-http://192.168.1.100:11434/v1}"
+api_key = "${LAN_LLM_API_KEY:-none}"
+timeout_secs = 600
+max_retries = 2
+concurrency = 4
+
 [providers.anthropic]
 kind = "anthropic"
 base_url = "https://api.anthropic.com"
