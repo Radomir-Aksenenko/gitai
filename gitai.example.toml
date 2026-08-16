@@ -235,7 +235,7 @@ arbiter = "big"
 [forges.local]
 # Gitea and Forgejo share an API; one adapter serves both.
 kind = "gitea"
-base_url = "https://git.example.com/api/v1"
+base_url = "http://localhost:3000/api/v1"
 token = "${GITEA_TOKEN}"
 webhook_secret = "${GITEA_WEBHOOK_SECRET}"
 # Only issues carrying this label are picked up, and `/gitai` in a comment
