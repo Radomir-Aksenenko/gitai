@@ -5,8 +5,9 @@ FROM rust:bookworm AS builder
 
 WORKDIR /build
 
-# Copy manifest and source files
-COPY Cargo.toml Cargo.lock ./
+# Copy manifest, source files, prompts and example config required at compile-time
+COPY Cargo.toml Cargo.lock gitai.example.toml ./
+COPY prompts ./prompts
 COPY crates ./crates
 
 # Build release binary
