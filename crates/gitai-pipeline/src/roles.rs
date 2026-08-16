@@ -31,14 +31,22 @@ pub struct WorkerOutput {
     /// Files the worker wants to see before it commits to an edit.
     #[serde(default)]
     pub read: Vec<String>,
+    /// Web search queries the worker wants to execute before it commits to an edit.
+    #[serde(default)]
+    pub search: Vec<String>,
     #[serde(default)]
     pub edits: Vec<Edit>,
 }
 
 impl WorkerOutput {
-    /// The worker asked to look around instead of writing anything.
+    /// The worker asked to look around at files.
     pub fn is_read_request(&self) -> bool {
         self.edits.is_empty() && !self.read.is_empty()
+    }
+
+    /// The worker asked to perform a web search.
+    pub fn is_search_request(&self) -> bool {
+        self.edits.is_empty() && !self.search.is_empty()
     }
 }
 

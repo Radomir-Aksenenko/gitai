@@ -56,6 +56,20 @@ enum Command {
 
     /// Run one task now, against a checkout on disk.
     Run(RunArgs),
+
+    /// Run a fast, token-efficient web search.
+    Search {
+        /// Search query
+        query: String,
+
+        /// Search provider: duckduckgo, tavily, brave, searxng
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Maximum results to return
+        #[arg(long, default_value = "5")]
+        max_results: usize,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -126,6 +140,39 @@ async fn main() -> anyhow::Result<()> {
         Command::Serve => serve(&cli.config).await,
 
         Command::Run(args) => run_once(&cli.config, args).await,
+
+        Command::Search {
+            query,
+            provider,
+            max_results,
+        } => {
+            let mut cfg = Config::load(&cli.config).unwrap_or_default();
+            if let Some(p) = provider {
+                cfg.web_search.provider = p;
+            }
+            cfg.web_search.max_results = max_results;
+
+            let started = std::time::Instant::now();
+            let engine = gitai_pipeline::WebSearchEngine::new(cfg.web_search);
+            let results = engine.search(&query).await?;
+            let elapsed = started.elapsed();
+
+            let formatted = gitai_pipeline::web_search::format_results_compact(
+                &query,
+                &results,
+                max_results,
+                220,
+            );
+            println!("{formatted}");
+            println!("---");
+            println!(
+                "Fetched {} result(s) in {:.2}s (~{} tokens)",
+                results.len(),
+                elapsed.as_secs_f64(),
+                gitai_llm::tokens::estimate(&formatted)
+            );
+            Ok(())
+        }
     }
 }
 

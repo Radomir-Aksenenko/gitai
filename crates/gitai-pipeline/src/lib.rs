@@ -10,8 +10,10 @@ pub mod engine;
 pub mod prompts;
 pub mod roles;
 pub mod testing;
+pub mod web_search;
 
 pub use edits::{Edit, EditOutcome};
 pub use engine::Engine;
 pub use prompts::Prompts;
 pub use roles::Roles;
+pub use web_search::{SearchResult, WebSearchEngine};

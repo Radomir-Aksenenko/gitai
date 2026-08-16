@@ -68,6 +68,7 @@ JSON only, in this shape:
 {
   "reasoning": "two or three sentences on what you are changing and why",
   "read": ["path/you/need/to/see.rs"],
+  "search": ["exact library API or error to search on the web"],
   "edits": [
     {"op": "write",   "path": "src/a.rs", "content": "the complete new file"},
     {"op": "replace", "path": "src/b.rs", "find": "exact existing text", "replace": "new text"},
@@ -79,6 +80,8 @@ JSON only, in this shape:
 - Need to see a file that is not shown above? Return it in `read` with an empty
   `edits` list. You will get the contents and another turn. Do not guess at
   file contents you have not been shown.
+- Need to look up external documentation, library API usage, or compiler errors? Return
+  queries in `search` with an empty `edits` list. You will get search snippets next turn.
 - `find` must match the file byte for byte, once. Include enough surrounding
   lines to be unambiguous. If a string appears more than once, add
   `"all": true` only when you truly mean every occurrence.

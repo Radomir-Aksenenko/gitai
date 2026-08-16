@@ -50,7 +50,7 @@ Write the plan as JSON with this shape:
 Rules that matter:
 
 - `language`: inspect the file tree (e.g. `Cargo.toml` -> Rust, `package.json` -> Node.js, `pyproject.toml`/`requirements.txt` -> Python, `go.mod` -> Go) and identify the language and tools.
-- `setup_commands`, `build_commands`, `test_commands`, `lint_commands`: specify executable shell commands appropriate for this project's stack. If the repository has no test suite or is empty/text, leave the list empty `[]`.
+- `setup_commands`, `build_commands`, `test_commands`, `lint_commands`: specify executable shell commands appropriate for this project's stack. Standard development toolchains (`pytest`, `ruff`, `cargo`, `rustc`, `node`, `npm`, `tsc`, `go`, `make`, `clang`) are already pre-installed in the sandbox environment — only specify `setup_commands` if the repository has specific dependencies to install (e.g. `npm install`, `pip install -r requirements.txt`). If the repository has no test suite or is empty/text, leave the list empty `[]`.
 - **Language**: Write `goal`, `acceptance`, `test_plan`, and `notes` in the **EXACT SAME LANGUAGE as the user's original issue** (e.g., if the issue is in Russian, write all text in Russian; if in English, write in English).
 - `acceptance` items are graded literally by a reviewer that has not read the
   issue. Write them so a yes or no answer is possible. "Cache entries are

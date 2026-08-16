@@ -101,6 +101,10 @@ impl DockerSandbox {
             args.push("--env".into());
             args.push(format!("{k}={v}"));
         }
+        if !self.cfg.env.contains_key("PIP_BREAK_SYSTEM_PACKAGES") {
+            args.push("--env".into());
+            args.push("PIP_BREAK_SYSTEM_PACKAGES=1".into());
+        }
 
         args.push(image.to_string());
         args.extend(["sh".to_string(), "-c".to_string(), KEEPALIVE.to_string()]);
@@ -220,6 +224,12 @@ impl Workspace for DockerWorkspace {
         for (k, v) in &req.env {
             args.push("--env".into());
             args.push(format!("{k}={v}"));
+        }
+        if !req.env.contains_key("PIP_BREAK_SYSTEM_PACKAGES")
+            && !self.cfg.env.contains_key("PIP_BREAK_SYSTEM_PACKAGES")
+        {
+            args.push("--env".into());
+            args.push("PIP_BREAK_SYSTEM_PACKAGES=1".into());
         }
         args.push(self.container.clone());
         args.extend(["sh".to_string(), "-c".to_string(), req.cmd.clone()]);

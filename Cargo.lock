@@ -825,6 +825,7 @@ dependencies = [
  "gitai-sandbox",
  "gitai-store",
  "minijinja",
+ "reqwest",
  "serde",
  "serde_json",
  "tempfile",

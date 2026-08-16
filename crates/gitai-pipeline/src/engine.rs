@@ -37,6 +37,7 @@ use crate::prompts::Prompts;
 use crate::roles::{
     ArbiterCtx, EditorCtx, PlannerCtx, ReviewSummary, ReviewerCtx, Roles, WorkerCtx,
 };
+use crate::web_search::WebSearchEngine;
 use gitai_core::model::Role;
 
 pub struct Engine {
@@ -45,6 +46,7 @@ pub struct Engine {
     sandbox: Arc<dyn Sandbox>,
     forges: Arc<ForgeRegistry>,
     roles: Arc<Roles>,
+    web_search: Arc<WebSearchEngine>,
 }
 
 impl Engine {
@@ -57,12 +59,14 @@ impl Engine {
         let models = Arc::new(ModelRegistry::build(&cfg)?);
         let prompts = Arc::new(Prompts::load(&cfg.prompts.dir)?);
         let roles = Arc::new(Roles::new(cfg.clone(), models, prompts));
+        let web_search = Arc::new(WebSearchEngine::new(cfg.web_search.clone()));
         Ok(Self {
             cfg,
             store,
             sandbox,
             forges,
             roles,
+            web_search,
         })
     }
 
@@ -531,15 +535,34 @@ impl Engine {
                 .await?;
             attempt.spend.add(&spend);
 
-            // The worker wants to look at something before committing to a change.
-            if out.is_read_request() {
-                let more = context::open_files(ws, &out.read, &limits).await;
-                merge_open_files(&mut open, more);
-                feedback = format!(
-                    "You asked for {} file(s); they are included above now. \
-                     Produce edits this turn.",
-                    out.read.len()
-                );
+            // The worker wants to look at files or search the web before committing to a change.
+            if out.edits.is_empty() && (!out.read.is_empty() || !out.search.is_empty()) {
+                let mut parts = Vec::new();
+
+                if !out.read.is_empty() {
+                    let more = context::open_files(ws, &out.read, &limits).await;
+                    merge_open_files(&mut open, more);
+                    parts.push(format!(
+                        "You asked for {} file(s); they are included above now.",
+                        out.read.len()
+                    ));
+                }
+
+                if !out.search.is_empty() {
+                    if self.web_search.is_enabled() {
+                        let search_res = self
+                            .web_search
+                            .search_all(&out.search)
+                            .await
+                            .unwrap_or_else(|e| format!("Web search failed: {e}"));
+                        parts.push(format!("Web search results:\n\n{search_res}"));
+                    } else {
+                        parts.push("Web search is currently disabled in configuration.".to_string());
+                    }
+                }
+
+                parts.push("Produce edits this turn.".to_string());
+                feedback = parts.join("\n\n");
                 continue;
             }
 

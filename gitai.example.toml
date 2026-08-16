@@ -130,6 +130,24 @@ max_changed_files = 60
 output_tail_bytes = 8000
 
 # ---------------------------------------------------------------------------
+# Web Search: Fast & token-efficient external documentation / error lookup
+# ---------------------------------------------------------------------------
+#
+# Providers:
+#   "duckduckgo" - Default zero-config, no API key needed, fast & free.
+#   "tavily"     - AI-optimized search API (requires api_key).
+#   "brave"      - Brave Search API (requires api_key).
+#   "searxng"    - Self-hosted SearXNG meta-engine (requires endpoint).
+
+[web_search]
+enabled = true
+provider = "duckduckgo"
+# api_key = "${TAVILY_API_KEY}"
+# endpoint = "http://searxng.local:8080"
+max_results = 5
+timeout_secs = 10
+
+# ---------------------------------------------------------------------------
 # Providers
 # ---------------------------------------------------------------------------
 #

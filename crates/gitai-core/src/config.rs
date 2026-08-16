@@ -22,6 +22,7 @@ pub struct Config {
     pub budget: Budget,
     pub gate: GateConfig,
     pub prompts: PromptConfig,
+    pub web_search: WebSearchConfig,
     pub providers: BTreeMap<String, ProviderConfig>,
     pub models: BTreeMap<String, ModelConfig>,
     pub roles: RoleConfig,
@@ -108,9 +109,11 @@ pub struct SandboxConfig {
 
 impl Default for SandboxConfig {
     fn default() -> Self {
+        let mut env = BTreeMap::new();
+        env.insert("PIP_BREAK_SYSTEM_PACKAGES".into(), "1".into());
         Self {
             kind: SandboxKind::Docker,
-            image: "docker.io/library/debian:bookworm-slim".into(),
+            image: "gitai-sandbox:latest".into(),
             images: BTreeMap::new(),
             workdir: "/work".into(),
             network: "none".into(),
@@ -121,7 +124,7 @@ impl Default for SandboxConfig {
             pids_limit: 512,
             work_root: PathBuf::from(".gitai/work"),
             mounts: Vec::new(),
-            env: BTreeMap::new(),
+            env,
         }
     }
 }
@@ -346,6 +349,38 @@ impl Default for ForgeConfig {
             draft_prs: true,
             delete_rejected_branches: true,
             timeout_secs: 30,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WebSearchConfig {
+    /// Enable web search capability for workers and CLI.
+    pub enabled: bool,
+    /// Provider: "duckduckgo", "tavily", "brave", "searxng".
+    pub provider: String,
+    /// API key for providers that require one (e.g. Tavily, Brave).
+    pub api_key: String,
+    /// Custom API endpoint (e.g. for self-hosted SearXNG).
+    pub endpoint: String,
+    /// Maximum number of search results to return.
+    pub max_results: usize,
+    /// Request timeout in seconds.
+    pub timeout_secs: u64,
+}
+
+impl Default for WebSearchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            provider: "duckduckgo".into(),
+            api_key: String::new(),
+            endpoint: String::new(),
+            max_results: 5,
+            timeout_secs: 10,
         }
     }
 }

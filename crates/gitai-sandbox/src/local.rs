@@ -69,6 +69,9 @@ impl Workspace for LocalWorkspace {
 
     async fn exec(&self, req: &ExecRequest) -> Result<ExecOutput> {
         let mut env: BTreeMap<String, String> = self.cfg.env.clone();
+        if !env.contains_key("PIP_BREAK_SYSTEM_PACKAGES") {
+            env.insert("PIP_BREAK_SYSTEM_PACKAGES".into(), "1".into());
+        }
         env.extend(req.env.clone());
 
         let cwd = match &req.cwd {
