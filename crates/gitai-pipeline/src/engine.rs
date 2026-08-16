@@ -227,6 +227,8 @@ impl Engine {
                 continue;
             }
 
+            self.announce_reviews(task, forge.as_deref(), &reviewed).await;
+
             // Sort by index first so an equal rank resolves the same way on
             // every run, whatever order the reviews happened to finish in.
             reviewed.sort_by_key(|a| a.index);
@@ -434,6 +436,7 @@ impl Engine {
         ws: &dyn Workspace,
         round_feedback: &str,
     ) -> Result<()> {
+        let forge = self.delivery(task).ok().flatten();
         let gate_cfg = self.effective_gate_config(spec);
         let setup = gitai_sandbox::run_setup(ws, &gate_cfg).await?;
         if !setup.ok {
@@ -551,8 +554,42 @@ impl Engine {
             // patch that passes a weak test without doing the work.
             if gate.passed && editor.done {
                 attempt.state = AttemptState::GatePassed;
+                self.announce_iteration_result(
+                    task,
+                    forge.as_deref(),
+                    attempt.index,
+                    &attempt.model,
+                    iteration + 1,
+                    true,
+                    "Gate пройден успешно и редактор подтвердил решение",
+                )
+                .await;
                 return Ok(());
             }
+
+            let reason = if !gate.passed {
+                format!(
+                    "Gate не прошёл проверку: `{}`\n> 🧠 **Анализ редактора:** {}",
+                    gate.summary(),
+                    editor.notes
+                )
+            } else {
+                format!(
+                    "Сборка и тесты пройдены, но редактор запросил доработку:\n> 🧠 **Замечания:** {}",
+                    editor.notes
+                )
+            };
+
+            self.announce_iteration_result(
+                task,
+                forge.as_deref(),
+                attempt.index,
+                &attempt.model,
+                iteration + 1,
+                false,
+                &reason,
+            )
+            .await;
 
             feedback = merge_feedback(&applied.failure_report(), &editor.feedback());
         }
@@ -963,6 +1000,59 @@ impl Engine {
             .await
         {
             tracing::warn!(error = %e, "could not announce arbiter feedback on the issue");
+        }
+    }
+
+    async fn announce_iteration_result(
+        &self,
+        task: &Task,
+        forge: Option<&dyn Forge>,
+        index: u32,
+        model: &str,
+        iteration: u32,
+        passed: bool,
+        detail: &str,
+    ) {
+        let Some(forge) = forge else {
+            return;
+        };
+        let body = if passed {
+            format!(
+                "✅ **Попытка #{index} (модель `{model}`, итерация {iteration}):** Сборка и тесты пройдены успешно! Редактор подтвердил корректность кода."
+            )
+        } else {
+            format!(
+                "🔄 **Попытка #{index} (модель `{model}`, итерация {iteration}):**\n{detail}\n\n*Передаю указания воркеру для исправления...*"
+            )
+        };
+        if let Err(e) = forge
+            .comment_issue(&task.repo, task.issue.number, &body)
+            .await
+        {
+            tracing::warn!(error = %e, "could not announce iteration result on the issue");
+        }
+    }
+
+    async fn announce_reviews(&self, task: &Task, forge: Option<&dyn Forge>, attempts: &[Attempt]) {
+        let Some(forge) = forge else {
+            return;
+        };
+        let mut body = "🧐 **Результаты независимого код-ревью (Reviewer):**\n\n".to_string();
+        for a in attempts {
+            if let Some(r) = &a.review {
+                let icon = if r.approved { "🟢" } else { "🟡" };
+                body.push_str(&format!(
+                    "- {icon} **Попытка #{}** (модель `{}`): оценка **{}/100**\n  *{}*\n",
+                    a.index, a.model, r.score, r.summary
+                ));
+            }
+        }
+        body.push_str("\n⚖️ *Передаю лучшее решение арбитру для финального утверждения...*");
+        if let Err(e) = forge
+            .comment_issue(&task.repo, task.issue.number, &body)
+            .await
+        {
+            tracing::warn!(error = %e, "could not announce reviews on the issue");
         }
     }
 
