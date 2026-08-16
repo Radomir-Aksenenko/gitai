@@ -856,7 +856,10 @@ impl Engine {
         .await;
 
         let comment = format!(
-            "Opened {} for this issue.\n\n{}\n\n---\n{}",
+            "🎉 **Разработка закончена!**\n\n\
+             Открыт Pull Request: {}\n\n\
+             **Итоги решения:**\n{}\n\n\
+             ---\n{}",
             pr.url,
             verdict.summary,
             spend_line(&task.spend)
@@ -1170,7 +1173,7 @@ impl Engine {
             return;
         };
         let body = format!(
-            "Could not finish this one.\n\n```\n{reason}\n```\n\n{}",
+            "❌ **Разработка не завершена (ошибка выполнения)**\n\n```\n{reason}\n```\n\n{}",
             spend_line(&task.spend)
         );
         if let Err(e) = forge
