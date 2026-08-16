@@ -176,7 +176,7 @@ arbiter = "big"
 
 [forges.local]
 kind = "gitea"
-base_url = "${GITEA_URL:-http://gitea:3000/api/v1}"
+base_url = "${GITEA_URL:-http://127.0.0.1:3000/api/v1}"
 token = "${GITEA_TOKEN:-}"
 webhook_secret = "${GITEA_WEBHOOK_SECRET:-}"
 trigger_label = "gitai"
