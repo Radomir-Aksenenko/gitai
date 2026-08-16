@@ -185,13 +185,14 @@ draft_prs = true
 delete_rejected_branches = true
 timeout_secs = 30
 
-[forges.hub]
-kind = "github"
-base_url = "https://api.github.com"
-token = "${GITHUB_TOKEN:-}"
-webhook_secret = "${GITHUB_WEBHOOK_SECRET:-}"
-trigger_label = "gitai"
-bot_login = "gitai[bot]"
-draft_prs = true
-delete_rejected_branches = true
-timeout_secs = 30
+# Optional GitHub.com integration (uncomment if using GitHub instead of/alongside Gitea)
+# [forges.hub]
+# kind = "github"
+# base_url = "https://api.github.com"
+# token = "${GITHUB_TOKEN:-}"
+# webhook_secret = "${GITHUB_WEBHOOK_SECRET:-}"
+# trigger_label = "gitai"
+# bot_login = "gitai[bot]"
+# draft_prs = true
+# delete_rejected_branches = true
+# timeout_secs = 30
