@@ -1,0 +1,11 @@
+target/
+.git/
+.gitai/
+data/
+gitea-data/
+*.log
+.env
+.env.local
+.env.*.local
+*.swp
+*~

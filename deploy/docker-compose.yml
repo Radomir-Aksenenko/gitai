@@ -1,0 +1,47 @@
+services:
+  gitai:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: gitai:latest
+    container_name: gitai
+    restart: unless-stopped
+    ports:
+      - "${GITAI_PORT:-8080}:8080"
+    env_file:
+      - path: ../.env
+        required: false
+    volumes:
+      - ../data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  gitea:
+    image: gitea/gitea:1
+    container_name: gitai-gitea
+    profiles:
+      - full
+    restart: unless-stopped
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+      GITEA__server__ROOT_URL: http://localhost:3000/
+      GITEA__server__SSH_PORT: "2222"
+      GITEA__webhook__ALLOWED_HOST_LIST: private,loopback,gitai
+      GITEA__database__DB_TYPE: sqlite3
+    volumes:
+      - ../gitea-data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

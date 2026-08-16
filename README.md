@@ -43,7 +43,24 @@ Both loops are bounded by a budget in rounds, attempts, iterations, tokens,
 wall clock and dollars. The two that matter most in practice are
 `max_iterations` (how long one attempt is allowed to flail) and `max_cost_usd`.
 
-## Getting started
+## Quick Start with Docker (Recommended)
+
+Run GitAI with zero local build prerequisites using Docker:
+
+```bash
+# 1. Copy the environment template and add your API keys
+cp .env.example .env
+
+# 2. Start GitAI container
+docker compose up -d
+
+# 3. Check health and configuration
+docker compose exec gitai gitai doctor
+```
+
+For full documentation and all-in-one stack options, see **[docs/docker.md](docs/docker.md)**.
+
+## Getting started (from source)
 
 ```bash
 cargo build --release

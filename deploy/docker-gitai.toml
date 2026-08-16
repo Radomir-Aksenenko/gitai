@@ -1,0 +1,188 @@
+# gitai configuration for Docker deployment.
+#
+# Environment variables (${VAR} and ${VAR:-fallback}) are expanded at runtime.
+
+[server]
+bind = "0.0.0.0:8080"
+public_url = "${PUBLIC_URL:-http://localhost:8080}"
+concurrency = 2
+
+[storage]
+url = "sqlite:///data/gitai.db?mode=rwc"
+
+[prompts]
+dir = "/data/prompts"
+
+# ---------------------------------------------------------------------------
+# Where model-written code runs
+# ---------------------------------------------------------------------------
+
+[sandbox]
+# "docker" uses sibling containers via mounted /var/run/docker.sock.
+# "local" runs commands directly inside this container (development only).
+kind = "${SANDBOX_KIND:-docker}"
+image = "${SANDBOX_IMAGE:-docker.io/library/rust:1-slim}"
+workdir = "/work"
+network = "none"
+cpus = 2.0
+memory = "4g"
+pids_limit = 512
+timeout_secs = 900
+work_root = "/data/work"
+mounts = []
+
+[sandbox.env]
+CARGO_TERM_COLOR = "never"
+CI = "1"
+
+# ---------------------------------------------------------------------------
+# Budget: the hard stops
+# ---------------------------------------------------------------------------
+
+[budget]
+max_rounds = 3
+attempts_per_round = 3
+max_iterations = 8
+max_tokens = 2000000
+max_wall_secs = 3600
+max_cost_usd = 5.0
+
+# ---------------------------------------------------------------------------
+# The gate
+# ---------------------------------------------------------------------------
+
+[gate]
+setup = ["cargo fetch --locked"]
+build = ["cargo build --all-targets --locked"]
+test = ["cargo test --all --locked"]
+lint = ["cargo clippy --all-targets -- -D warnings", "cargo fmt --check"]
+require_tests = false
+test_path_patterns = [
+    "**/test/**",
+    "**/tests/**",
+    "**/spec/**",
+    "**/*_test.*",
+    "**/test_*",
+    "**/*.test.*",
+    "**/*.spec.*",
+]
+enforce_scope = true
+max_changed_files = 60
+output_tail_bytes = 8000
+
+# ---------------------------------------------------------------------------
+# Providers
+# ---------------------------------------------------------------------------
+
+[providers.anthropic]
+kind = "anthropic"
+base_url = "https://api.anthropic.com"
+api_key = "${ANTHROPIC_API_KEY:-}"
+timeout_secs = 300
+max_retries = 3
+concurrency = 8
+
+[providers.openai]
+kind = "openai"
+base_url = "https://api.openai.com/v1"
+api_key = "${OPENAI_API_KEY:-}"
+timeout_secs = 300
+max_retries = 3
+concurrency = 8
+
+[providers.openrouter]
+kind = "openai"
+base_url = "https://openrouter.ai/api/v1"
+api_key = "${OPENROUTER_API_KEY:-}"
+timeout_secs = 300
+max_retries = 3
+concurrency = 8
+
+[providers.ollama]
+kind = "openai"
+base_url = "${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}"
+api_key = "ollama"
+timeout_secs = 600
+max_retries = 2
+concurrency = 2
+
+[providers.mock]
+kind = "mock"
+base_url = ""
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+
+[models.big]
+provider = "${PLANNER_PROVIDER:-anthropic}"
+model = "${PLANNER_MODEL:-claude-opus-5}"
+temperature = 0.2
+max_tokens = 16000
+price_in = 5.0
+price_out = 25.0
+context_tokens = 200000
+
+[models.mid]
+provider = "${EDITOR_PROVIDER:-anthropic}"
+model = "${EDITOR_MODEL:-claude-sonnet-5}"
+temperature = 0.3
+max_tokens = 12000
+price_in = 3.0
+price_out = 15.0
+context_tokens = 200000
+
+[models.small-a]
+provider = "${WORKER_PROVIDER:-anthropic}"
+model = "${WORKER_MODEL_A:-claude-sonnet-5}"
+temperature = 0.6
+max_tokens = 8000
+context_tokens = 200000
+
+[models.small-b]
+provider = "${WORKER_PROVIDER:-anthropic}"
+model = "${WORKER_MODEL_B:-claude-sonnet-5}"
+temperature = 0.9
+max_tokens = 8000
+context_tokens = 200000
+
+[models.mock]
+provider = "mock"
+model = "mock"
+
+# ---------------------------------------------------------------------------
+# Roles
+# ---------------------------------------------------------------------------
+
+[roles]
+planner = "big"
+worker = ["small-a", "small-b"]
+editor = "mid"
+reviewer = "mid"
+arbiter = "big"
+
+# ---------------------------------------------------------------------------
+# Forges
+# ---------------------------------------------------------------------------
+
+[forges.local]
+kind = "gitea"
+base_url = "${GITEA_URL:-http://gitea:3000/api/v1}"
+token = "${GITEA_TOKEN:-}"
+webhook_secret = "${GITEA_WEBHOOK_SECRET:-}"
+trigger_label = "gitai"
+bot_login = "gitai"
+draft_prs = true
+delete_rejected_branches = true
+timeout_secs = 30
+
+[forges.hub]
+kind = "github"
+base_url = "https://api.github.com"
+token = "${GITHUB_TOKEN:-}"
+webhook_secret = "${GITHUB_WEBHOOK_SECRET:-}"
+trigger_label = "gitai"
+bot_login = "gitai[bot]"
+draft_prs = true
+delete_rejected_branches = true
+timeout_secs = 30
