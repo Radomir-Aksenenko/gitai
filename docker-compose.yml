@@ -31,19 +31,17 @@ services:
     profiles:
       - full
     restart: unless-stopped
+    network_mode: host
     environment:
       USER_UID: 1000
       USER_GID: 1000
       GITEA__server__ROOT_URL: http://localhost:3000/
       GITEA__server__SSH_PORT: "2222"
-      GITEA__webhook__ALLOWED_HOST_LIST: private,loopback,gitai
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__webhook__ALLOWED_HOST_LIST: "*"
+      GITEA__security__ALLOWED_HOST_LIST: "*"
       GITEA__database__DB_TYPE: sqlite3
     volumes:
       - ./gitea-data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-    ports:
-      - "3000:3000"
-      - "2222:22"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
