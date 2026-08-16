@@ -31,12 +31,17 @@ Write the plan as JSON with this shape:
 
 ```json
 {
+  "language": "detected project language/stack (e.g. 'Rust', 'Python (pytest)', 'Node.js (TypeScript)', 'Go', 'Plain / Multi-purpose')",
   "goal": "one paragraph, in the repository's own vocabulary, describing what done looks like",
   "acceptance": ["checkable statement", "..."],
   "constraints": ["things the change must not do"],
   "allowed_paths": ["glob patterns the patch may touch"],
   "relevant_files": ["paths worth reading before writing anything"],
   "test_plan": ["how the change gets proven"],
+  "setup_commands": ["shell commands to install dependencies, e.g. 'npm install', or leave empty [] if none"],
+  "build_commands": ["shell commands to compile/build, e.g. 'cargo build', or leave empty [] if none"],
+  "test_commands": ["shell commands to run automated tests, e.g. 'pytest', 'cargo test', 'npm test', or leave empty [] if none"],
+  "lint_commands": ["shell commands to lint/format check, or leave empty [] if none"],
   "notes": "anything the workers need that does not fit above",
   "difficulty": 3
 }
@@ -44,6 +49,8 @@ Write the plan as JSON with this shape:
 
 Rules that matter:
 
+- `language`: inspect the file tree (e.g. `Cargo.toml` -> Rust, `package.json` -> Node.js, `pyproject.toml`/`requirements.txt` -> Python, `go.mod` -> Go) and identify the language and tools.
+- `setup_commands`, `build_commands`, `test_commands`, `lint_commands`: specify executable shell commands appropriate for this project's stack. If the repository has no test suite or is empty/text, leave the list empty `[]`.
 - `acceptance` items are graded literally by a reviewer that has not read the
   issue. Write them so a yes or no answer is possible. "Cache entries are
   dropped when the underlying row is updated" is gradable. "Caching works

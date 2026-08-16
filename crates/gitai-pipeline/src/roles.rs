@@ -188,7 +188,10 @@ impl Roles {
 
     pub async fn plan(&self, ctx: PlannerCtx) -> Result<(Spec, Spend)> {
         let model = self.cfg.roles.planner.clone();
-        self.ask(Role::Planner, &model, ctx).await
+        let file_tree = ctx.file_tree.clone();
+        let (mut spec, spend): (Spec, Spend) = self.ask(Role::Planner, &model, ctx).await?;
+        normalise_spec(&mut spec, &file_tree);
+        Ok((spec, spend))
     }
 
     pub async fn work(&self, model: &str, ctx: WorkerCtx) -> Result<(WorkerOutput, Spend)> {
@@ -232,6 +235,26 @@ fn normalise(mut v: Verdict, reviewer: &str) -> Verdict {
     }
     v.score = v.score.min(100);
     v
+}
+
+/// Infers the project language/stack from repository files if the planner model left it blank.
+fn normalise_spec(spec: &mut Spec, file_tree: &str) {
+    if spec.language.as_ref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+        if file_tree.contains("Cargo.toml") {
+            spec.language = Some("Rust".into());
+        } else if file_tree.contains("package.json") {
+            spec.language = Some("Node.js / TypeScript".into());
+        } else if file_tree.contains("pyproject.toml")
+            || file_tree.contains("requirements.txt")
+            || file_tree.contains("setup.py")
+        {
+            spec.language = Some("Python".into());
+        } else if file_tree.contains("go.mod") {
+            spec.language = Some("Go".into());
+        } else {
+            spec.language = Some("Plain / Multi-purpose".into());
+        }
+    }
 }
 
 #[cfg(test)]

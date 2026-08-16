@@ -16,7 +16,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use gitai_core::config::Config;
+use gitai_core::config::{Config, GateConfig};
 use gitai_core::error::{Error, Result};
 use gitai_core::event::{Event, EventKind};
 use gitai_core::forge::Forge;
@@ -434,7 +434,8 @@ impl Engine {
         ws: &dyn Workspace,
         round_feedback: &str,
     ) -> Result<()> {
-        let setup = gitai_sandbox::run_setup(ws, &self.cfg.gate).await?;
+        let gate_cfg = self.effective_gate_config(spec);
+        let setup = gitai_sandbox::run_setup(ws, &gate_cfg).await?;
         if !setup.ok {
             return Err(Error::sandbox(format!(
                 "workspace setup failed: {}",
@@ -498,7 +499,7 @@ impl Engine {
             )
             .await;
 
-            let gate = gitai_sandbox::run_gate(ws, &self.cfg.gate, &spec.allowed_paths).await?;
+            let gate = gitai_sandbox::run_gate(ws, &gate_cfg, &spec.allowed_paths).await?;
             self.emit(
                 Event::new(
                     task.id,
@@ -871,6 +872,22 @@ impl Engine {
                     .join(", ")
             ));
         }
+
+        let gate_cfg = self.effective_gate_config(spec);
+        let lang = spec.language.as_deref().unwrap_or("Не определён / Общий");
+        body.push_str(&format!(
+            "\n🔍 **Стек проекта и команды автопроверки (Adaptive Gate):**\n\
+             - **Определённый стек:** `{lang}`\n\
+             - **Установка зависимостей (Setup):** {}\n\
+             - **Сборка (Build):** {}\n\
+             - **Тестирование (Test):** {}\n\
+             - **Линтинг (Lint):** {}\n",
+            format_cmds(&gate_cfg.setup),
+            format_cmds(&gate_cfg.build),
+            format_cmds(&gate_cfg.test),
+            format_cmds(&gate_cfg.lint),
+        ));
+
         body.push_str(&format!(
             "\n🚀 *Запускаю раунд {} ({} параллельных попыток воркеров с проверкой через Gate)...*",
             task.round, task.budget.attempts_per_round
@@ -963,6 +980,36 @@ impl Engine {
         {
             tracing::warn!(error = %e, "could not report the failure on the issue");
         }
+    }
+
+    /// Derives the effective gate config, combining static config with dynamically detected
+    /// commands from the planner model if the static configuration is empty.
+    fn effective_gate_config(&self, spec: &Spec) -> GateConfig {
+        let mut cfg = self.cfg.gate.clone();
+        if cfg.setup.is_empty() && !spec.setup_commands.is_empty() {
+            cfg.setup = spec.setup_commands.clone();
+        }
+        if cfg.build.is_empty() && !spec.build_commands.is_empty() {
+            cfg.build = spec.build_commands.clone();
+        }
+        if cfg.test.is_empty() && !spec.test_commands.is_empty() {
+            cfg.test = spec.test_commands.clone();
+        }
+        if cfg.lint.is_empty() && !spec.lint_commands.is_empty() {
+            cfg.lint = spec.lint_commands.clone();
+        }
+        cfg
+    }
+}
+
+fn format_cmds(cmds: &[String]) -> String {
+    if cmds.is_empty() {
+        "`(нет)`".to_string()
+    } else {
+        cmds.iter()
+            .map(|c| format!("`{c}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 

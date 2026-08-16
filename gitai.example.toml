@@ -92,12 +92,12 @@ max_cost_usd = 5.0
 # this in first, before you tune a single prompt.
 
 [gate]
-# Runs once per workspace, before the network is cut.
-setup = ["cargo fetch --locked"]
-
-build = ["cargo build --all-targets --locked"]
-test = ["cargo test --all --locked"]
-lint = ["cargo clippy --all-targets -- -D warnings", "cargo fmt --check"]
+# Adaptive gate: leave commands empty [] to let the planner model automatically
+# detect the repository language/stack and run the appropriate commands (e.g. pytest, npm test, cargo test).
+setup = []
+build = []
+test = []
+lint = []
 
 # Reject a patch that adds no test. Blunt, and it works.
 require_tests = false

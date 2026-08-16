@@ -52,10 +52,12 @@ max_cost_usd = 5.0
 # ---------------------------------------------------------------------------
 
 [gate]
-setup = ["cargo fetch --locked"]
-build = ["cargo build --all-targets --locked"]
-test = ["cargo test --all --locked"]
-lint = ["cargo clippy --all-targets -- -D warnings", "cargo fmt --check"]
+# Adaptive gate: leave empty [] to allow the planner model to automatically
+# detect the repository's language/framework and run the appropriate test/build commands.
+setup = []
+build = []
+test = []
+lint = []
 require_tests = false
 test_path_patterns = [
     "**/test/**",

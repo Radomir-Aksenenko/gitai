@@ -242,6 +242,9 @@ impl Task {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Spec {
+    /// Detected language/stack of the project, e.g. "Rust", "Python (pytest)", "Node.js (TypeScript)", "Go".
+    #[serde(default)]
+    pub language: Option<String>,
     /// One paragraph: what "done" means, in the repo's own vocabulary.
     pub goal: String,
     /// Checkable statements. The reviewer scores against exactly these.
@@ -258,6 +261,18 @@ pub struct Spec {
     pub relevant_files: Vec<String>,
     #[serde(default)]
     pub test_plan: Vec<String>,
+    /// Shell commands to install dependencies, if required.
+    #[serde(default)]
+    pub setup_commands: Vec<String>,
+    /// Shell commands to build the project, if required.
+    #[serde(default)]
+    pub build_commands: Vec<String>,
+    /// Shell commands to test the project, if required.
+    #[serde(default)]
+    pub test_commands: Vec<String>,
+    /// Shell commands to lint the project, if required.
+    #[serde(default)]
+    pub lint_commands: Vec<String>,
     #[serde(default)]
     pub notes: String,
     /// Planner's own read of how risky this is, 1 (trivial) to 5 (architectural).
