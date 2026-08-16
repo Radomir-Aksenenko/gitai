@@ -6,8 +6,8 @@ services:
     image: gitai:latest
     container_name: gitai
     restart: unless-stopped
-    ports:
-      - "${GITAI_PORT:-8080}:8080"
+    # Use host networking for direct and seamless access to LAN servers (e.g. Ollama/vLLM)
+    network_mode: host
     env_file:
       - path: .env
         required: false
@@ -16,9 +16,6 @@ services:
       - ./data:/data
       # Docker socket to allow gitai to spin up sandboxes for task attempts
       - /var/run/docker.sock:/var/run/docker.sock
-    extra_hosts:
-      # Allows gitai to reach Ollama or other host-hosted services via host.docker.internal
-      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://127.0.0.1:8080/healthz || exit 1"]
       interval: 30s
