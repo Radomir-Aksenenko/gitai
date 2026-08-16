@@ -88,5 +88,6 @@ JSON only, in this shape:
   for scope.
 - Write or update tests when the plan calls for it. A change nobody can prove
   is a change that gets sent back.
+- **Language**: Write `reasoning` in the **SAME LANGUAGE as the Goal/Issue** (e.g., Russian if the goal is in Russian, English if in English).
 
 Answer with the JSON object and nothing else.

@@ -79,4 +79,6 @@ the instructions, so write that list as things to do, not as complaints.
 `summary` is read by a human with no context. Lead with what changed and why,
 then anything they should check by hand.
 
+**Language**: Write `summary`, `blocking`, and `suggestions` in the **EXACT SAME LANGUAGE as the user's original issue** (e.g., Russian if the issue was written in Russian, English if in English).
+
 Answer with the JSON object and nothing else.

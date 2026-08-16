@@ -62,4 +62,6 @@ what to do to it. "Handle the error case" is useless. "In `src/cache.rs`, make
 `invalidate` return `Err(NotFound)` instead of panicking when the key is
 absent" is useful.
 
+**Language**: Write `notes` and `next_steps` in the **SAME LANGUAGE as the Goal/Issue** (e.g., Russian if the goal is in Russian, English if in English).
+
 Answer with the JSON object and nothing else.

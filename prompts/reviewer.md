@@ -65,4 +65,6 @@ criterion is below 30.
 `blocking` non-empty means `approved` must be false. An empty `blocking` list
 with `approved` false is a contradiction, so do not produce one.
 
+**Language**: Write `summary`, `blocking`, and `suggestions` in the **SAME LANGUAGE as the Goal/Issue** (e.g., Russian if the goal is in Russian, English if in English).
+
 Answer with the JSON object and nothing else.
