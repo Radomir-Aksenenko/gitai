@@ -14,6 +14,14 @@ use serde::de::DeserializeOwned;
 pub fn extract_json(text: &str) -> Option<&str> {
     let candidate = strip_fence(text);
 
+    // If the stripped text is already a clean JSON object or array, take it directly
+    let trimmed = candidate.trim();
+    if (trimmed.starts_with('{') && trimmed.ends_with('}'))
+        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+    {
+        return Some(trimmed);
+    }
+
     let bytes = candidate.as_bytes();
     let mut start = None;
     let mut depth = 0usize;
@@ -53,6 +61,19 @@ pub fn extract_json(text: &str) -> Option<&str> {
             _ => {}
         }
     }
+
+    // Fallback: slice from first '{' to last '}'
+    if let (Some(first), Some(last)) = (candidate.find('{'), candidate.rfind('}')) {
+        if first < last {
+            return Some(&candidate[first..=last]);
+        }
+    }
+    if let (Some(first), Some(last)) = (candidate.find('['), candidate.rfind(']')) {
+        if first < last {
+            return Some(&candidate[first..=last]);
+        }
+    }
+
     None
 }
 
