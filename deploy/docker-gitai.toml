@@ -41,7 +41,8 @@ CI = "1"
 
 [budget]
 max_rounds = 3
-attempts_per_round = 3
+attempts_per_round = 1
+parallel = false
 max_iterations = 8
 max_tokens = 2000000
 max_wall_secs = 3600
@@ -106,7 +107,7 @@ base_url = "${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}"
 api_key = "${OLLAMA_API_KEY:-ollama}"
 timeout_secs = 600
 max_retries = 2
-concurrency = 4
+concurrency = 1
 
 # Local network OpenAI-compatible server (vLLM, LM Studio, Ollama on another PC)
 [providers.lan]
@@ -115,7 +116,7 @@ base_url = "${LAN_LLM_URL:-http://192.168.1.100:11434/v1}"
 api_key = "${LAN_LLM_API_KEY:-none}"
 timeout_secs = 600
 max_retries = 2
-concurrency = 4
+concurrency = 1
 
 [providers.mock]
 kind = "mock"

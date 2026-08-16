@@ -182,27 +182,68 @@ impl Engine {
             // for no reason. The provider semaphore still bounds the real
             // concurrency.
             self.set_state(task, TaskState::Reviewing).await?;
-            let mut set = JoinSet::new();
-            for attempt in passed {
-                let engine = self.clone();
-                let spec = spec.clone();
-                let task_view = task.clone();
-                let mut attempt = attempt.clone();
+            let mut reviewed: Vec<Attempt> = Vec::new();
 
-                set.spawn(async move {
-                    let spend = match engine.review(&spec, &attempt, &task_view).await {
-                        Ok((verdict, spend)) => {
-                            engine
-                                .emit(
-                                    Event::new(
-                                        task_view.id,
-                                        EventKind::ReviewVerdict,
-                                        format!("score {}: {}", verdict.score, verdict.summary),
+            if task.budget.parallel {
+                let mut set = JoinSet::new();
+                for attempt in passed {
+                    let engine = self.clone();
+                    let spec = spec.clone();
+                    let task_view = task.clone();
+                    let mut attempt = attempt.clone();
+
+                    set.spawn(async move {
+                        let spend = match engine.review(&spec, &attempt, &task_view).await {
+                            Ok((verdict, spend)) => {
+                                engine
+                                    .emit(
+                                        Event::new(
+                                            task_view.id,
+                                            EventKind::ReviewVerdict,
+                                            format!("score {}: {}", verdict.score, verdict.summary),
+                                        )
+                                        .with_attempt(attempt.id)
+                                        .with_data(json!(verdict)),
                                     )
-                                    .with_attempt(attempt.id)
-                                    .with_data(json!(verdict)),
+                                    .await;
+                                attempt.review = Some(verdict);
+                                spend
+                            }
+                            Err(e) => {
+                                tracing::warn!(attempt = %attempt.id, error = %e, "review failed");
+                                attempt.review = Some(Verdict::rejected("reviewer", e.to_string()));
+                                Spend::default()
+                            }
+                        };
+                        let _ = engine.store.save_attempt(&attempt).await;
+                        (attempt, spend)
+                    });
+                }
+
+                while let Some(joined) = set.join_next().await {
+                    match joined {
+                        Ok((attempt, spend)) => {
+                            task.spend.add(&spend);
+                            reviewed.push(attempt);
+                        }
+                        Err(e) => tracing::error!(error = %e, "review task did not finish"),
+                    }
+                }
+            } else {
+                for attempt in passed {
+                    let mut attempt = attempt.clone();
+                    let spend = match self.review(&spec, &attempt, task).await {
+                        Ok((verdict, spend)) => {
+                            self.emit(
+                                Event::new(
+                                    task.id,
+                                    EventKind::ReviewVerdict,
+                                    format!("score {}: {}", verdict.score, verdict.summary),
                                 )
-                                .await;
+                                .with_attempt(attempt.id)
+                                .with_data(json!(verdict)),
+                            )
+                            .await;
                             attempt.review = Some(verdict);
                             spend
                         }
@@ -212,19 +253,9 @@ impl Engine {
                             Spend::default()
                         }
                     };
-                    let _ = engine.store.save_attempt(&attempt).await;
-                    (attempt, spend)
-                });
-            }
-
-            let mut reviewed: Vec<Attempt> = Vec::new();
-            while let Some(joined) = set.join_next().await {
-                match joined {
-                    Ok((attempt, spend)) => {
-                        task.spend.add(&spend);
-                        reviewed.push(attempt);
-                    }
-                    Err(e) => tracing::error!(error = %e, "review task did not finish"),
+                    let _ = self.store.save_attempt(&attempt).await;
+                    task.spend.add(&spend);
+                    reviewed.push(attempt);
                 }
             }
 
@@ -318,33 +349,45 @@ impl Engine {
         base_branch: &str,
         feedback: &str,
     ) -> Vec<Attempt> {
-        let mut set = JoinSet::new();
+        if task.budget.parallel {
+            let mut set = JoinSet::new();
 
-        for index in 0..task.budget.attempts_per_round {
-            let engine = self.clone();
-            let task = task.clone();
-            let spec = spec.clone();
-            let repo_url = repo_url.to_string();
-            let base_branch = base_branch.to_string();
-            let feedback = feedback.to_string();
+            for index in 0..task.budget.attempts_per_round {
+                let engine = self.clone();
+                let task = task.clone();
+                let spec = spec.clone();
+                let repo_url = repo_url.to_string();
+                let base_branch = base_branch.to_string();
+                let feedback = feedback.to_string();
 
-            set.spawn(async move {
-                engine
-                    .run_attempt(&task, &spec, index, &repo_url, &base_branch, &feedback)
-                    .await
-            });
-        }
-
-        let mut attempts = Vec::new();
-        while let Some(joined) = set.join_next().await {
-            match joined {
-                Ok(attempt) => attempts.push(attempt),
-                // A panicked attempt must not take the round down with it.
-                Err(e) => tracing::error!(error = %e, "attempt task did not finish"),
+                set.spawn(async move {
+                    engine
+                        .run_attempt(&task, &spec, index, &repo_url, &base_branch, &feedback)
+                        .await
+                });
             }
+
+            let mut attempts = Vec::new();
+            while let Some(joined) = set.join_next().await {
+                match joined {
+                    Ok(attempt) => attempts.push(attempt),
+                    // A panicked attempt must not take the round down with it.
+                    Err(e) => tracing::error!(error = %e, "attempt task did not finish"),
+                }
+            }
+            attempts.sort_by_key(|a| a.index);
+            attempts
+        } else {
+            let mut attempts = Vec::new();
+            for index in 0..task.budget.attempts_per_round {
+                let attempt = self
+                    .clone()
+                    .run_attempt(task, spec, index, repo_url, base_branch, feedback)
+                    .await;
+                attempts.push(attempt);
+            }
+            attempts
         }
-        attempts.sort_by_key(|a| a.index);
-        attempts
     }
 
     /// One attempt, start to finish. Failures are recorded on the returned

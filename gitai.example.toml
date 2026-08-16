@@ -75,8 +75,11 @@ CI = "1"
 [budget]
 # Outer loop. An arbiter rejection sends the work back this many times.
 max_rounds = 3
-# How many models attack the task in parallel each round.
-attempts_per_round = 3
+# How many attempts run per round. Default is 1.
+attempts_per_round = 1
+# Whether attempts run in parallel or sequentially. Default is false (sequential)
+# to protect local LLMs / GPUs from overloading. Set to true if using fast cloud APIs.
+parallel = false
 # Inner loop. Worker-to-editor passes before an attempt is abandoned.
 max_iterations = 8
 

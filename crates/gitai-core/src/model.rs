@@ -550,8 +550,11 @@ impl Verdict {
 pub struct Budget {
     /// Outer loop: arbiter rejection sends work back this many times.
     pub max_rounds: u32,
-    /// How many models attack the task in parallel each round.
+    /// How many models attack the task each round.
     pub attempts_per_round: u32,
+    /// Whether attempts and reviews run concurrently (parallel) or sequentially (one by one).
+    /// Default is false (sequential) to prevent overloading local LLM servers.
+    pub parallel: bool,
     /// Inner loop: worker to editor passes before an attempt is abandoned.
     pub max_iterations: u32,
     pub max_tokens: u64,
@@ -563,7 +566,8 @@ impl Default for Budget {
     fn default() -> Self {
         Self {
             max_rounds: 3,
-            attempts_per_round: 3,
+            attempts_per_round: 1,
+            parallel: false,
             max_iterations: 8,
             max_tokens: 2_000_000,
             max_wall_secs: 3_600,
